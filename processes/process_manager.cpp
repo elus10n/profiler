@@ -93,7 +93,11 @@ void ProcessManager::terminate_process()
 
 bool ProcessManager::is_running() const
 {
-    return child_pid > 0;
+    if(child_pid <= 0)
+    {
+        return false;
+    }
+    return (kill(child_pid,0) == 0);
 }
 
 pid_t ProcessManager::get_pid() const

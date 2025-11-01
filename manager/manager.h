@@ -6,6 +6,8 @@
 #include <memory>
 #include <functional>
 #include <atomic>
+#include <chrono>
+#include <thread>
 
 #include "../metrics/metrics_collector.h"
 #include "../processes/process_manager.h"
@@ -14,7 +16,7 @@ const uint64_t min_interval_ms = 300;
 
 struct Configuration
 {
-    std::vector<MetricType> metrics = {MetricType::CPU_CYCLES,MetricType::INSTRUCTIONS};
+    std::vector<MetricType> metrics = {MetricType::PAGE_FAULTS};
     uint64_t interval_ms = 500;
 
     Configuration() = default;
@@ -26,37 +28,36 @@ struct Configuration
     }
 };
 
+const Configuration default_cfg;
+
+using metric_callback = std::function<void(ProfilingSnapshot)>;
+using error_callback = std::function<void(const std::string&)>;
+
 class Manager
 {
     std::unique_ptr<ProcessManager> manager;
     std::unique_ptr<MetricCollector> collector;
 
-    using metric_callback = std::function<void(ProfilingSnapshot)>;
-    using error_callback = std::function<void(const std::string&)>;
-
     metric_callback callback_metric;
     error_callback callback_error;
 
-    std::atomic<bool> is_profiling{false};
+    std::atomic<bool> is_profiling_active{false};
     std::atomic<pid_t> current_pid{-1};
     std::string current_programm = "idle";
-    Configuration current_config;
+    Configuration current_config = default_cfg;
 
     public:
     Manager();
     ~Manager() = default;
 
     bool setup_and_start_profiling(const std::string& programm, const std::vector<std::string>& args, const Configuration& config);
-    bool stop_profiling();
+    void stop_profiling();
 
     void setup_metrics_callback(metric_callback callback);
     void setup_error_callback(error_callback callback);
 
     private:
-    void setup_metric_callback();
-    bool launch_programm(const std::string& programm, const std::vector<std::string> args);
-    bool is_profiling_active() const;
-
+    bool is_active() const;
     pid_t get_current_pid() const;
     std::string get_current_programm() const;
     Configuration get_current_config() const;

@@ -83,6 +83,7 @@ private:
     
     std::atomic<bool> profiling_active_{false};  // Флаг активности 
     std::atomic<int> profiled_pid_{-1};          // Текущий PID 
+    std::atomic<bool> should_stop{false};        // для того, чтобы profiling loop своевременно останавливался
 
     std::thread profiling_thread_;               // Поток в котором работает сбор метрик
     std::vector<PerfEvent> perf_events_;         // Все открытые perf events
@@ -99,9 +100,9 @@ private:
     void report_error(const std::string& error);
     void report_metrics(const ProfilingSnapshot& snapshot);
     
-    static int open_perf_event(int pid, MetricType type);
-    static uint64_t read_perf_event(int fd);
-    static bool is_process_alive(int pid);
+    int open_perf_event(int pid, MetricType type);
+    uint64_t read_perf_event(int fd);
+    bool is_process_alive(int pid);
 };
 
 #endif

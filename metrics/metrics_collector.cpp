@@ -62,6 +62,7 @@ void MetricCollector::stop_profiling()
 {
     if (profiling_active_.exchange(false)) //если профилировка была запущена -> вернет true и установит false
     {
+        should_stop = true;
         if (profiling_thread_.joinable()) //если активен -> вернет true
         {
             profiling_thread_.join();//блкируем текущий(основаной получается) поток до завершения потока сбора метрик.
@@ -71,6 +72,7 @@ void MetricCollector::stop_profiling()
         
         std::cout << "[Profiler] Stopped profiling PID " << profiled_pid_ << "\n";
         profiled_pid_ = -1;
+        should_stop = false;
     }
 }
 
@@ -205,7 +207,8 @@ int MetricCollector::open_perf_event(int pid, MetricType type)
     attr.size = sizeof(attr);
     attr.type = PERF_TYPE_HARDWARE; // Используем аппаратные счетчики процессора
     attr.disabled = 1;              // Начинаем в выключенном состоянии
-    attr.exclude_kernel = 1;        // Исключаем события в kernel space
+    attr.exclude_kernel = 0;        // Исключаем события в kernel space
+    attr.inherit = 1;
     attr.exclude_hv = 1;            // Исключаем события в гипервизоре
     
     switch (type)//исходя из типа метрики, выбираем конфигурацию сбора (по надобности меняем тип сбора на программный)
@@ -240,6 +243,7 @@ int MetricCollector::open_perf_event(int pid, MetricType type)
     int fd = perf_event_open(&attr, pid, -1, -1, 0);//делаем системный вызов через обертку с уже сформированной структурой 
     if (fd < 0)//если дескриптор открылся с ошибкой - ретерн
     {
+        report_error("Failed to open perf event " + std::to_string(static_cast<int>(type)) + " pid: " + std::to_string(pid));
         return -1;
     }
     
