@@ -4,24 +4,21 @@ pid_t ProcessManager::launch_programm(const std::string& programm, const std::ve
 {
     if(programm.empty())
     {
-        report_error("From PM: programm path is empty!");
         return -1;
     }
 
     if(is_running())
     {
-        report_error("From PM: is already running!");
         return -1;
     }
 
     child_pid = fork();
 
-    if(child_pid == -1)
+    if(child_pid.load() == -1)
     {
-        report_error("From PM: error with fork()!");
         return -1;
     }
-    else if(child_pid == 0)//дочерний
+    else if(child_pid.load() == 0)
     {
         std::vector<char*> argv;
         char* programm_copy = strdup(programm.c_str());
@@ -32,54 +29,20 @@ pid_t ProcessManager::launch_programm(const std::string& programm, const std::ve
         }
         argv.push_back(nullptr);
 
-        execvp(programm.c_str(), argv.data());
+        std::cerr << execvp(programm.c_str(), argv.data()) << std::endl;
 
         for (auto& arg : argv) 
         {
             free(arg);
         }
-        std::cerr << "From PM: error with execvp(...): " << std::endl;
         exit(EXIT_FAILURE);
-    }
-
-    return child_pid;
-}
-
-int ProcessManager::wait_for_child_process()
-{
-    if(!is_running())
-    {
-        return -1;
-    }
-
-    int status;
-    waitpid(child_pid,&status,0);
-    child_pid = -1;
-    if (WIFEXITED(status)) 
-    {
-        return WEXITSTATUS(status); 
-    } 
-    else 
-    {
-        return -1;
-    }
-}
-
-void ProcessManager::report_error(const std::string& error)
-{
-    if(callback_)
-    {
-        callback_(error);
     }
     else
     {
-        std::cerr << error;
+        is_run = true;
+        waiter = std::thread(&ProcessManager::wait_child_process,this);
     }
-}
-
-void ProcessManager::setup_error_callback(error_callback callback)
-{
-    callback_ = callback;
+    return child_pid.load();
 }
 
 void ProcessManager::terminate_process()
@@ -87,20 +50,26 @@ void ProcessManager::terminate_process()
     if(is_running())
     {
         kill(child_pid,SIGTERM);
+    }
+}
+
+void ProcessManager::wait_child_process()
+{
+    int status;
+    pid_t ret_pid = waitpid(child_pid.load(),&status,0);
+    if(ret_pid == child_pid.load())
+    {
+        is_run = false;
         child_pid = -1;
     }
 }
 
-bool ProcessManager::is_running() const
-{
-    if(child_pid <= 0)
-    {
-        return false;
-    }
-    return (kill(child_pid,0) == 0);
+bool ProcessManager::is_running()
+{   
+    return is_run.load();
 }
 
-pid_t ProcessManager::get_pid() const
-{
-    return child_pid;
+pid_t ProcessManager::get_pid()
+{   
+    return child_pid.load();
 }

@@ -8,6 +8,7 @@
 #include <thread>
 #include <functional>
 #include <chrono>
+#include <iostream>
 
 enum class MetricType 
 {
@@ -23,18 +24,18 @@ enum class MetricType
 
 struct MetricValue 
 {
-    MetricType type;    // Тип метрики 
-    uint64_t value;     // Числовое значение (дельта за последний интервал)
-    std::string name;   // Человеко-читаемое имя 
-    std::string unit;   // Единицы измерения 
+    MetricType type;    
+    uint64_t value;     
+    std::string name;   
+    std::string unit;   
 };
 
 
 struct ProfilingSnapshot 
 {
     std::vector<MetricValue> metrics;
-    uint64_t timestamp_ms;             // Абсолютное время сбора 
-    uint64_t duration_ms;              // Длительность интервала измерения 
+    uint64_t timestamp_ms;             
+    uint64_t duration_ms;              
     
     const MetricValue* find_metric(MetricType type) const 
     {
@@ -47,10 +48,13 @@ struct ProfilingSnapshot
         }
         return nullptr;
     }
+
+    friend std::ostream& operator<<(std::ostream& ostr, const ProfilingSnapshot& snapshot);
 };
 
 using ProfilingMetricCallback = std::function<void(const ProfilingSnapshot& snapshot)>;
 using ProfilingErrorCallback = std::function<void(const std::string& error)>;
+using ProfilingLogCallback = std::function<void(const std::string& log)>;
 
 class MetricCollector 
 {
@@ -65,10 +69,11 @@ public:
     
     void stop_profiling();
     
-    const std::vector<ProfilingSnapshot>& get_snapshots() const;//возврат всех снимков
+    const std::vector<ProfilingSnapshot>& get_snapshots() const;
 
     void setup_error_callback(ProfilingErrorCallback callback);
     void setup_metric_callback(ProfilingMetricCallback callback);
+    void setup_log_callback(ProfilingLogCallback callback);
     
     bool is_profiling() const { return profiling_active_; }
     int get_profiled_pid() const { return profiled_pid_; }
@@ -76,29 +81,32 @@ public:
 private:
     struct PerfEvent 
     {
-        int fd;                 // Файловый дескриптор Linux perf event
-        MetricType type;        // Тип метрики который он измеряет
-        uint64_t last_value;    // Последнее значение для delta вычислений
+        int fd;                
+        MetricType type;       
+        uint64_t last_value;    
     };
     
-    std::atomic<bool> profiling_active_{false};  // Флаг активности 
-    std::atomic<int> profiled_pid_{-1};          // Текущий PID 
-    std::atomic<bool> should_stop{false};        // для того, чтобы profiling loop своевременно останавливался
+    std::atomic<bool> profiling_active_{false};  
+    std::atomic<int> profiled_pid_{-1};           
 
-    std::thread profiling_thread_;               // Поток в котором работает сбор метрик
-    std::vector<PerfEvent> perf_events_;         // Все открытые perf events
-    ProfilingMetricCallback metric_callback_;  // Callback для уведомлений
-    ProfilingErrorCallback error_callback_;    // Callback для ошибок
-    std::vector<ProfilingSnapshot> snapshots_;   // История всех собранных снимков
-    uint64_t profiling_interval_ms_;             // Интервал между измерениями
+    std::thread profiling_thread_;              
+    std::vector<PerfEvent> perf_events_;        
+
+    ProfilingMetricCallback metric_callback_; 
+    ProfilingErrorCallback error_callback_;   
+    ProfilingLogCallback log_callback;
+
+    std::vector<ProfilingSnapshot> snapshots_; 
+    uint64_t profiling_interval_ms_;            
     
-    void profiling_loop();                       // Главный цикл в отдельном потоке
+    void profiling_loop();                     
     bool setup_perf_events(int pid, const std::vector<MetricType>& metrics);
-    void cleanup_perf_events();                  // Освобождение системных ресурсов
+    void cleanup_perf_events();                 
     ProfilingSnapshot collect_snapshot(uint64_t duration_ms);
 
     void report_error(const std::string& error);
     void report_metrics(const ProfilingSnapshot& snapshot);
+    void report_log(const std::string& log);
     
     int open_perf_event(int pid, MetricType type);
     uint64_t read_perf_event(int fd);

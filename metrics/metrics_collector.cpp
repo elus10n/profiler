@@ -15,26 +15,27 @@ static long perf_event_open(struct perf_event_attr *attr, pid_t pid, int cpu, in
 
 MetricCollector::MetricCollector() = default;
 
-MetricCollector::~MetricCollector() 
+MetricCollector::~MetricCollector()
 {
     stop_profiling();
 }
 
+
 bool MetricCollector::start_profiling(int pid, const std::vector<MetricType>& metrics, uint64_t interval_ms) 
 {
-    if (profiling_active_)//нельзя запустить то, что уже идет
+    if (profiling_active_)
     {
         report_error("[Profiler] Profiling already active!");
         return false;
     }
     
-    if (!is_process_alive(pid))//нельзя профилировать то, что умерло
+    if (!is_process_alive(pid))
     {
         report_error("[Profiler] Process " + std::to_string(pid) + " does not exist!");
         return false;
     }
     
-    if (metrics.empty()) //профилирование по показателям: "никакие" - невозможно
+    if (metrics.empty())
     {
         report_error("[Profiler] No metrics specified!");
         return false;
@@ -43,75 +44,68 @@ bool MetricCollector::start_profiling(int pid, const std::vector<MetricType>& me
     profiled_pid_ = pid;
     profiling_interval_ms_ = interval_ms;
     
-    if (!setup_perf_events(pid, metrics)) //не получилось установить perf events
+    if (!setup_perf_events(pid, metrics)) 
     {
-        report_error("[Profiler] Failed to setup perf events!");
         return false;
     }
     
-    snapshots_.clear();//очищаем историю, если в ней вдруг уже что то было
+    snapshots_.clear();
     profiling_active_ = true;
     
-    profiling_thread_ = std::thread(&MetricCollector::profiling_loop, this);//запускаем основную функцию в другом потоке
+    profiling_thread_ = std::thread(&MetricCollector::profiling_loop, this);
     
-    std::cout << "[Profiler] Started profiling PID " << pid << " with interval " << interval_ms << "ms\n";
+    report_log("[Profiler] Started profiling PID " + std::to_string(pid) +  " with interval " + std::to_string(interval_ms) + "ms\n");
     return true;
 }
 
 void MetricCollector::stop_profiling() 
 {
-    if (profiling_active_.exchange(false)) //если профилировка была запущена -> вернет true и установит false
+    if (profiling_active_.exchange(false))
     {
-        should_stop = true;
-        if (profiling_thread_.joinable()) //если активен -> вернет true
+        if (profiling_thread_.joinable())
         {
-            profiling_thread_.join();//блкируем текущий(основаной получается) поток до завершения потока сбора метрик.
+            profiling_thread_.join();
         }
 
-        cleanup_perf_events();//закрытие сбора метрик
+        cleanup_perf_events();
         
-        std::cout << "[Profiler] Stopped profiling PID " << profiled_pid_ << "\n";
+        report_log("[Profiler] Stopped profiling PID " + std::to_string(profiled_pid_) + "\n");
         profiled_pid_ = -1;
-        should_stop = false;
     }
 }
 
 void MetricCollector::profiling_loop() 
 {
-    std::cout << "[Profiler] Profiling loop started for PID " << profiled_pid_ << "\n";
+    report_log("[Profiler] Profiling loop started for PID " + std::to_string(profiled_pid_) +"\n");
     
-    while (profiling_active_ && is_process_alive(profiled_pid_)) //собираем метрики пока нужно собирать метрики и пока профилируемый процесс жив
+    while (profiling_active_ && is_process_alive(profiled_pid_)) 
     {
         auto interval_start = std::chrono::steady_clock::now();
         
-        ProfilingSnapshot snapshot = collect_snapshot(profiling_interval_ms_);//чтение всех perf event'ов
-        snapshots_.push_back(snapshot);//помещаем снапшот в историю
+        ProfilingSnapshot snapshot = collect_snapshot(profiling_interval_ms_);
+        snapshots_.push_back(snapshot);
         
-        if (metric_callback_)//если callback определен
-        {
-            metric_callback_(snapshot);//вызываем callback ..??????????????????????????????..
-        }
+        report_metrics(snapshot);
         
         auto elapsed = std::chrono::steady_clock::now() - interval_start;
         auto sleep_time = std::chrono::milliseconds(profiling_interval_ms_) - elapsed;
         if (sleep_time > std::chrono::milliseconds(0)) 
         {
             std::this_thread::sleep_for(sleep_time);
-        }//вся эта конструкция для того, чтобы один цикл сбора данных для снапшота занимал время, не меньшее, чем profiling_interval_ms_
-    }
-    
-    if (!is_process_alive(profiled_pid_))//если профилируемый процесс завершен -> уведомляем об этом
-    {
-        std::cout << "[Profiler] Profiled process " << profiled_pid_ << " has terminated\n";
-        
-        if (metric_callback_)//если callback определен
-        {
-            ProfilingSnapshot final_snapshot = collect_snapshot(0);//финальный снапшот ..???????????????????????..
-            metric_callback_(final_snapshot);//вызываем callback ..??????????????????????????????..
         }
     }
-    
-    std::cout << "[Profiler] Profiling loop finished\n";
+    if (!is_process_alive(profiled_pid_))
+    {
+        report_log("[Profiler] Profiled process " + std::to_string(profiled_pid_) + " has terminated\n");
+        
+        if (metric_callback_)
+        {
+            ProfilingSnapshot final_snapshot = collect_snapshot(0);
+            metric_callback_(final_snapshot);
+        }
+    }
+
+    report_log("[Profiler] Profiling loop finished\n");
 }
 
 ProfilingSnapshot MetricCollector::collect_snapshot(uint64_t duration_ms) 
@@ -119,20 +113,20 @@ ProfilingSnapshot MetricCollector::collect_snapshot(uint64_t duration_ms)
     ProfilingSnapshot snapshot;
 
     snapshot.timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();//абсолютное время собираемого снапшота
-    snapshot.duration_ms = duration_ms;//установка интервала времени с прошлого снапшота
+    snapshot.duration_ms = duration_ms;
     
-    for (auto& event : perf_events_)//обходим все perf_events
+    for (auto& event : perf_events_)
     {
-        uint64_t current_value = read_perf_event(event.fd);//читаем c дескриптора ..?????????????????..
+        uint64_t current_value = read_perf_event(event.fd);
         
-        uint64_t delta = current_value - event.last_value;//вычисляем дельту метрики
-        event.last_value = current_value;//обновляем абсолютное значение
+        uint64_t delta = current_value - event.last_value;
+        event.last_value = current_value;
         
-        MetricValue metric;//создаем метрику
-        metric.type = event.type;//тип берем из perf_event'а
-        metric.value = delta;//устанавливаем значение
+        MetricValue metric;
+        metric.type = event.type;
+        metric.value = delta;
         
-        switch (event.type)//исходя из типа perf_event'а устанавливаем оставшиеся поля метрики
+        switch (event.type)
         {
             case MetricType::INSTRUCTIONS:
                 metric.name = "instructions";
@@ -163,26 +157,23 @@ ProfilingSnapshot MetricCollector::collect_snapshot(uint64_t duration_ms)
                 metric.unit = "switches";
                 break;
         }
-
-        snapshot.metrics.push_back(metric);//метрику пушим в снапшот
+        snapshot.metrics.push_back(metric);
     }
     return snapshot;
 }
 
 bool MetricCollector::setup_perf_events(int pid, const std::vector<MetricType>& metrics) 
 {
-    for (auto metric_type : metrics)//обходим все типы наблюдаемых метрик
+    for (auto metric_type : metrics)
     {
-        int fd = open_perf_event(pid, metric_type);//создаем дескриптор с открытым сбором метрики для pid'а
-        if (fd < 0)//если дескриптор открылся с ошибкой
+        int fd = open_perf_event(pid, metric_type);
+        if (fd < 0)
         {
-            report_error("[Profiler] Failed to open perf event for metric type " + std::to_string(static_cast<int>(metric_type)));
-            cleanup_perf_events();//сворачиваем все perf_event'ы
+            cleanup_perf_events();
             return false;
         }
         
-        perf_events_.push_back({fd, metric_type, 0});//если успешно, то текущий perf_event отправляется в сущетсвующие perf_event'ы
-        std::cout << "[Profiler] Opened perf event for " << perf_events_.back().fd << "\n";
+        perf_events_.push_back({fd, metric_type, 0});
     }
     
     return true;
@@ -190,73 +181,76 @@ bool MetricCollector::setup_perf_events(int pid, const std::vector<MetricType>& 
 
 void MetricCollector::cleanup_perf_events() 
 {
-    for (auto& event : perf_events_)//для каждого perf_event'а из текущих
+    for (auto& event : perf_events_)
     {
-        if (event.fd >= 0)//если дескриптор нормальный
+        if (event.fd >= 0)
         {
-            close(event.fd);//закрываем
+            close(event.fd);
         }
     }
-    perf_events_.clear();//в конце очищаем вектор
+    perf_events_.clear();
 }
 
 int MetricCollector::open_perf_event(int pid, MetricType type) 
 {
-    struct perf_event_attr attr;//системная структура
-    memset(&attr, 0, sizeof(attr));//обнуляем структуру
+    struct perf_event_attr attr;
+    memset(&attr, 0, sizeof(attr));
     attr.size = sizeof(attr);
-    attr.type = PERF_TYPE_HARDWARE; // Используем аппаратные счетчики процессора
-    attr.disabled = 1;              // Начинаем в выключенном состоянии
-    attr.exclude_kernel = 0;        // Исключаем события в kernel space
-    attr.inherit = 1;
-    attr.exclude_hv = 1;            // Исключаем события в гипервизоре
+    attr.disabled = 1;              
+    attr.exclude_kernel = 0;        
+    attr.exclude_hv = 1;            
     
-    switch (type)//исходя из типа метрики, выбираем конфигурацию сбора (по надобности меняем тип сбора на программный)
+    switch (type)
     {
         case MetricType::INSTRUCTIONS:
+            attr.type = PERF_TYPE_HARDWARE; 
             attr.config = PERF_COUNT_HW_INSTRUCTIONS;
             break;
         case MetricType::CPU_CYCLES:
+            attr.type = PERF_TYPE_HARDWARE; 
             attr.config = PERF_COUNT_HW_CPU_CYCLES;
             break;
         case MetricType::CACHE_MISSES:
+            attr.type = PERF_TYPE_HARDWARE; 
             attr.config = PERF_COUNT_HW_CACHE_MISSES;
             break;
         case MetricType::CACHE_REFERENCES:
+            attr.type = PERF_TYPE_HARDWARE; 
             attr.config = PERF_COUNT_HW_CACHE_REFERENCES;
             break;
         case MetricType::BRANCH_MISSES:
+            attr.type = PERF_TYPE_HARDWARE; 
             attr.config = PERF_COUNT_HW_BRANCH_MISSES;
             break;
         case MetricType::PAGE_FAULTS:
-            attr.type = PERF_TYPE_SOFTWARE; // Страничные нарушения - software event
+            attr.type = PERF_TYPE_SOFTWARE; 
             attr.config = PERF_COUNT_SW_PAGE_FAULTS;
             break;
         case MetricType::CONTEXT_SWITCHES:
-            attr.type = PERF_TYPE_SOFTWARE; // Переключения контекста - software event  
+            attr.type = PERF_TYPE_SOFTWARE;  
             attr.config = PERF_COUNT_SW_CONTEXT_SWITCHES;
             break;
         default:
             return -1;
     }
     
-    int fd = perf_event_open(&attr, pid, -1, -1, 0);//делаем системный вызов через обертку с уже сформированной структурой 
-    if (fd < 0)//если дескриптор открылся с ошибкой - ретерн
+    int fd = perf_event_open(&attr, pid, -1, -1, 0);
+    if (fd < 0)
     {
-        report_error("Failed to open perf event " + std::to_string(static_cast<int>(type)) + " pid: " + std::to_string(pid));
+        report_error("[Profiler]Failed to open perf event " + std::to_string(static_cast<int>(type)) + " pid: " + std::to_string(pid));
         return -1;
     }
     
-    ioctl(fd, PERF_EVENT_IOC_RESET, 0);  // Сброс в 0
-    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0); // Включение счетчика
+    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
     
     return fd;
 }
 
 uint64_t MetricCollector::read_perf_event(int fd) 
 {
-    uint64_t value = 0;//значение для читаемой метрики
-    if (read(fd, &value, sizeof(value)) != sizeof(value))//если чтение неуспешно
+    uint64_t value = 0;
+    if (read(fd, &value, sizeof(value)) != sizeof(value))
     {
         return 0;
     }
@@ -270,7 +264,7 @@ bool MetricCollector::is_process_alive(int pid)
 
 const std::vector<ProfilingSnapshot>& MetricCollector::get_snapshots() const 
 {
-    return snapshots_;//возврат всех снапшотов (вся история)
+    return snapshots_;
 }
 
 void MetricCollector::setup_error_callback(ProfilingErrorCallback callback)
@@ -281,6 +275,11 @@ void MetricCollector::setup_error_callback(ProfilingErrorCallback callback)
 void MetricCollector::setup_metric_callback(ProfilingMetricCallback callback)
 {
     metric_callback_ = callback;
+}
+
+void MetricCollector::setup_log_callback(ProfilingLogCallback callback)
+{
+    log_callback = callback;
 }
 
 void MetricCollector::report_error(const std::string& error)
@@ -303,6 +302,27 @@ void MetricCollector::report_metrics(const ProfilingSnapshot& snapshot)
     }
     else
     {
-        report_error("Undiefined metric_callback_in_MC!");
+        report_error("Undiefined metric_callback in MC!");
     }
+}
+
+void MetricCollector::report_log(const std::string& log)
+{
+    if(log_callback)
+    {
+        log_callback(log);
+    }
+    else
+    {
+        report_error("Undefined log_callback in MC!");
+    }
+}
+
+std::ostream& operator<<(std::ostream& ostr, const ProfilingSnapshot& snapshot)
+{
+    for(const auto& metric : snapshot.metrics)
+    {
+        ostr << metric.name << ": " << metric.value << std::endl;
+    }
+    return ostr;
 }

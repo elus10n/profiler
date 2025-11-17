@@ -4,9 +4,11 @@ Manager::Manager()
 {
     manager = std::make_unique<ProcessManager>();
     collector = std::make_unique<MetricCollector>();
+
+    setup();
 }
 
-bool Manager::setup_and_start_profiling(const std::string& programm, const std::vector<std::string>& args, const Configuration& config)//надо пересмотреть, как ошибки будут доходить
+bool Manager::start_profiling(const std::string& programm, const std::vector<std::string>& args, const ProfilingConfiguration& config)//надо пересмотреть, как ошибки будут доходить
 {
     if(current_pid != -1)
     {
@@ -22,7 +24,7 @@ bool Manager::setup_and_start_profiling(const std::string& programm, const std::
 
     if(!config.is_valid())
     {
-        report_error("Configuration is invalid!");
+        report_error("ProfilingConfiguration is invalid!");
         return false;
     }
     current_config = config;
@@ -31,7 +33,7 @@ bool Manager::setup_and_start_profiling(const std::string& programm, const std::
 
     if(new_pid == -1)
     {
-        report_error("Failed with process create!");
+        report_error("Problem with fork");
         return false;
     }
     
@@ -39,12 +41,23 @@ bool Manager::setup_and_start_profiling(const std::string& programm, const std::
 
     if(!manager->is_running())
     {
-        report_error("Process ends after start!");
+        report_error("Process ends after start! Check program path!");
         return false;
     }
 
     current_pid = new_pid;
 
+    if(!collector->start_profiling(current_pid, current_config.metrics, current_config.interval_ms))
+    {
+        manager->terminate_process();
+        return false;
+    }
+
+    return true;
+}
+
+void Manager::setup()
+{
     metric_callback metric_callback = [this](const ProfilingSnapshot& snapshot)
     {
         this->on_metrics_recieved(snapshot);
@@ -55,34 +68,21 @@ bool Manager::setup_and_start_profiling(const std::string& programm, const std::
         this->on_error_recieved(error);
     };
 
+    log_callback log_callback = [this](const std::string& log)
+    {
+        this->on_log_recieved(log);
+    };
+
     collector->setup_metric_callback(metric_callback);
     collector->setup_error_callback(error_callback);
-
-
-    if(!collector->start_profiling(current_pid, current_config.metrics, current_config.interval_ms))
-    {
-        manager->terminate_process();
-        return false;
-    }
-    is_profiling_active = true;
-
-    return true;
+    collector->setup_log_callback(log_callback);
 }
 
 void Manager::stop_profiling()
 {
-    bool expected = true;
-    if (!is_profiling_active.compare_exchange_strong(expected, false)) {
-        report_error("Profiling inactive already!");
-        return;
-    }
-    
-    collector->stop_profiling();
     manager->terminate_process();
-    
-    current_pid = -1;
-    current_programm = "idle";
-    current_config = default_cfg;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    collector->stop_profiling();
 }
 
 void Manager::setup_metrics_callback(metric_callback callback)
@@ -95,9 +95,19 @@ void Manager::setup_error_callback(error_callback callback)
     callback_error = callback;
 }
 
+void Manager::setup_log_callback(log_callback callback)
+{
+    callback_log = callback;
+}
+
 bool Manager::is_active() const
 {
-    return is_profiling_active;
+    return collector->is_profiling();
+}
+
+bool Manager::is_process_alive() const
+{
+    return manager->is_running();
 }
 
 pid_t Manager::get_current_pid() const
@@ -110,7 +120,7 @@ std::string Manager::get_current_programm() const
     return current_programm;
 }
 
-Configuration Manager::get_current_config() const
+ProfilingConfiguration Manager::get_current_config() const
 {
     return current_config;
 }
@@ -123,6 +133,11 @@ void Manager::on_metrics_recieved(const ProfilingSnapshot& snapshot)
 void Manager::on_error_recieved(const std::string& error)
 {
     report_error(error);
+}
+
+void Manager::on_log_recieved(const std::string& log)
+{
+    report_log(log);
 }
 
 void Manager::report_error(const std::string& error)
@@ -147,4 +162,23 @@ void Manager::report_metrics(const ProfilingSnapshot& snapshot)
     {
         report_error("Unfefined callback in Manager!");
     }
+}
+
+void Manager::report_log(const std::string& log)
+{
+    if(callback_log)
+    {
+        callback_log(log);
+    }
+    else
+    {
+        report_error("Undefined callback in Manager!");
+    }
+}
+
+std::ostream& operator<<(std::ostream& ostr, const ProfilingConfiguration pr_config)
+{
+    ostr << "Metrics: (later)" << std::endl;
+    ostr << "Profiling_interval: "<<pr_config.interval_ms<<std::endl;
+    return ostr;
 }
