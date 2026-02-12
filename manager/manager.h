@@ -47,7 +47,6 @@ class Manager
     error_callback callback_error;
     log_callback callback_log;
 
-    std::atomic<pid_t> current_pid{-1};
     std::string current_programm = "idle";
     ProfilingConfiguration current_config = default_cfg;
 

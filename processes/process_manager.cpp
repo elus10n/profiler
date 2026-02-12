@@ -29,7 +29,7 @@ pid_t ProcessManager::launch_programm(const std::string& programm, const std::ve
         }
         argv.push_back(nullptr);
 
-        std::cerr << execvp(programm.c_str(), argv.data()) << std::endl;
+        execvp(programm.c_str(), argv.data());
 
         for (auto& arg : argv) 
         {
@@ -55,8 +55,7 @@ void ProcessManager::terminate_process()
 
 void ProcessManager::wait_child_process()
 {
-    int status;
-    pid_t ret_pid = waitpid(child_pid.load(),&status,0);
+    pid_t ret_pid = waitpid(child_pid.load(),0,0);
     if(ret_pid == child_pid.load())
     {
         is_run = false;
@@ -64,12 +63,12 @@ void ProcessManager::wait_child_process()
     }
 }
 
-bool ProcessManager::is_running()
+bool ProcessManager::is_running() const
 {   
     return is_run.load();
 }
 
-pid_t ProcessManager::get_pid()
+pid_t ProcessManager::get_pid() const
 {   
     return child_pid.load();
 }

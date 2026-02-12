@@ -32,9 +32,9 @@ class ProcessManager
 
     pid_t launch_programm(const std::string& programm, const std::vector<std::string>& args);
     void terminate_process();
-    bool is_running();
+    bool is_running() const;
     void wait_child_process();
-    pid_t get_pid();
+    pid_t get_pid() const;
 };
 
 #endif

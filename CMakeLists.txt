@@ -11,6 +11,8 @@ add_executable(my_program
     manager/manager.h
     metrics/metrics_collector.cpp
     metrics/metrics_collector.h
+    metrics/EventCreator.h
+    metrics/SnapshotManager.h
     processes/process_manager.cpp
     processes/process_manager.h
     console_interface/user_interface_c.cpp
