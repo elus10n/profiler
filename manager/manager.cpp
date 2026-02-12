@@ -8,9 +8,9 @@ Manager::Manager()
     setup();
 }
 
-bool Manager::start_profiling(const std::string& programm, const std::vector<std::string>& args, const ProfilingConfiguration& config)//надо пересмотреть, как ошибки будут доходить
+bool Manager::start_profiling(const std::string& programm, const std::vector<std::string>& args, const ProfilingConfiguration& config)
 {
-    if(current_pid != -1)
+    if(manager->get_pid() != -1)
     {
         manager->terminate_process();
     }
@@ -24,20 +24,16 @@ bool Manager::start_profiling(const std::string& programm, const std::vector<std
 
     if(!config.is_valid())
     {
-        report_error("ProfilingConfiguration is invalid!");
+        report_error("Profiling Configuration is invalid!");
         return false;
     }
     current_config = config;
 
-    pid_t new_pid = manager->launch_programm(programm,args);
-
-    if(new_pid == -1)
+    if(manager->launch_programm(programm,args) == -1)
     {
         report_error("Problem with fork");
         return false;
     }
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     if(!manager->is_running())
     {
@@ -45,9 +41,7 @@ bool Manager::start_profiling(const std::string& programm, const std::vector<std
         return false;
     }
 
-    current_pid = new_pid;
-
-    if(!collector->start_profiling(current_pid, current_config.metrics, current_config.interval_ms))
+    if(!collector->start_profiling(manager->get_pid(), current_config.metrics, current_config.interval_ms))
     {
         manager->terminate_process();
         return false;
@@ -80,9 +74,8 @@ void Manager::setup()
 
 void Manager::stop_profiling()
 {
-    manager->terminate_process();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     collector->stop_profiling();
+    manager->terminate_process();
 }
 
 void Manager::setup_metrics_callback(metric_callback callback)
@@ -112,7 +105,7 @@ bool Manager::is_process_alive() const
 
 pid_t Manager::get_current_pid() const
 {
-    return current_pid;
+    return manager->get_pid();
 }
 
 std::string Manager::get_current_programm() const
