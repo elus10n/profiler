@@ -22,7 +22,7 @@ struct PerfEvent
     std::shared_ptr<Metric> metric;                      
 };
 
-class EventManager
+class EventManager//добавить деструктор + убрать
 {               
     std::vector<PerfEvent> perf_events_;  
 
@@ -88,7 +88,7 @@ class EventManager
         {
             return -1;
         }
-        
+        //добавить обработку ошибок
         ioctl(fd, PERF_EVENT_IOC_RESET, 0);
         ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
         

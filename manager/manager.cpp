@@ -10,7 +10,7 @@ Manager::Manager()
 
 bool Manager::start_profiling(const std::string& programm, const std::vector<std::string>& args, const ProfilingConfiguration& config)
 {
-    if(manager->get_pid() != -1)
+    if(manager->is_running())
     {
         manager->terminate_process();
     }
