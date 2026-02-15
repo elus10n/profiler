@@ -17,6 +17,8 @@ add_executable(my_program
     processes/process_manager.h
     console_interface/user_interface_c.cpp
     console_interface/user_interface_c.h
+    console_interface/configurator.h
+    console_interface/text_printer.h
 )
 
 # Включаем директории с заголовками
