@@ -101,7 +101,7 @@ bool MetricCollector::is_process_alive(int pid)
     return (kill(pid, 0) == 0);
 }
 
-const std::vector<ProfilingSnapshot>& MetricCollector::get_snapshots() const 
+const std::vector<ProfilingSnapshot>& MetricCollector::get_snapshots() 
 {
     return snapshotManager->getSnapshots();
 }

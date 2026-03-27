@@ -29,7 +29,7 @@ public:
     
     void stop_profiling();
     
-    const std::vector<ProfilingSnapshot>& get_snapshots() const;
+    const std::vector<ProfilingSnapshot>& get_snapshots();
 
     void setup_error_callback(ProfilingErrorCallback callback);
     void setup_metric_callback(ProfilingMetricCallback callback);

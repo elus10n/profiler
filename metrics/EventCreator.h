@@ -22,7 +22,7 @@ struct PerfEvent
     std::shared_ptr<Metric> metric;                      
 };
 
-class EventManager//добавить деструктор + убрать
+class EventManager
 {               
     std::vector<PerfEvent> perf_events_;  
 
