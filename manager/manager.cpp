@@ -168,10 +168,3 @@ void Manager::report_log(const std::string& log)
         report_error("Undefined callback in Manager!");
     }
 }
-
-std::ostream& operator<<(std::ostream& ostr, const ProfilingConfiguration pr_config)
-{
-    ostr << "Metrics: (later)" << std::endl;
-    ostr << "Profiling_interval: "<<pr_config.interval_ms<<std::endl;
-    return ostr;
-}

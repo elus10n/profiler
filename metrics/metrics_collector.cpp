@@ -20,7 +20,7 @@ MetricCollector::~MetricCollector()
     stop_profiling();
 }
 
-bool MetricCollector::start_profiling(int pid, const std::vector<MetricType>& metrics, uint64_t interval_ms) 
+bool MetricCollector::start_profiling(int pid, const ProfilingConfiguration& config) 
 {    
     if (!is_process_alive(pid))
     {
@@ -28,27 +28,32 @@ bool MetricCollector::start_profiling(int pid, const std::vector<MetricType>& me
         return false;
     }
     
-    if (metrics.empty())
+    if (config.metrics.empty())
     {
         report_error("[Profiler] No metrics specified!");
         return false;
     }
+
+    mode = config.mode;
     
     profiled_pid_ = pid;
-    profiling_interval_ms_ = interval_ms;
+    profiling_interval_ms_ = config.interval_ms;
 
-    metrics_ = Converter::convert_types_to_metric(metrics);
+    auto metrics_ = Converter::convert_types_to_metric(config.metrics);
+    bool is_sampling = mode == Modes::COUNTING ? false : true;
+    int count = 0;
+    if(mode == Modes::CPU_HOTSPOT) count = freq_cpu_hotspot;
+    else if(mode == Modes::C_M_HOTSPOT) count = cache_miss_bound;
+    else if(mode == Modes::B_HOTSPOT) count = branch_miss_bound;
+
+    EventConfiguration event_config(metrics_, is_sampling, count);
     
-    if (!eventManager->setup_perf_events(pid, metrics_)) 
-    {
-        return false;
-    }
-    
+    if (!eventManager->setup_perf_events(event_config)) return false;
     profiling_active_ = true;
     
     profiling_thread_ = std::thread(&MetricCollector::profiling_loop, this);
     
-    report_log("[Profiler] Started profiling PID " + std::to_string(pid) +  " with interval " + std::to_string(interval_ms) + "ms\n");
+    report_log("[Profiler] Started profiling PID " + std::to_string(profiled_pid_) +  " with interval " + std::to_string(profiling_interval_ms_) + "ms\n");
     return true;
 }
 
@@ -56,10 +61,7 @@ void MetricCollector::stop_profiling()
 {
     if (profiling_active_.exchange(false))
     {
-        if (profiling_thread_.joinable())
-        {
-            profiling_thread_.join();
-        }
+        if (profiling_thread_.joinable()) profiling_thread_.join();
 
         eventManager->cleanup_perf_events();
         
@@ -75,23 +77,26 @@ void MetricCollector::profiling_loop()
     {
         auto interval_start = std::chrono::steady_clock::now();
 
-        snapshotData data = eventManager->read_perf_events();
-        
-        ProfilingSnapshot snapshot = snapshotManager->collect_snapshot(profiling_interval_ms_, data);
-        
-        report_metrics(snapshot);
-        
+        if(mode == Modes::COUNTING)
+        {
+            snapshotData data = eventManager->read_perf_events();
+            
+            ProfilingSnapshot snapshot = snapshotManager->collect_snapshot(profiling_interval_ms_, data); // метод для каунтинга должен называться по другому
+            
+            report_metrics(snapshot);
+        }
+        else
+        {
+            HotspotRawData data = eventManager->read_mmap_memory();
+            
+            snapshotManager->append_callchain(data);
+        }
+
         auto elapsed = std::chrono::steady_clock::now() - interval_start;
         auto sleep_time = std::chrono::milliseconds(profiling_interval_ms_) - elapsed;
-        if (sleep_time > std::chrono::milliseconds(0)) 
-        {
-            std::this_thread::sleep_for(sleep_time);
-        }
+        if (sleep_time > std::chrono::milliseconds(0)) std::this_thread::sleep_for(sleep_time);
     }
-    if (!is_process_alive(profiled_pid_))
-    {
-        report_log("[Profiler] Profiled process " + std::to_string(profiled_pid_) + " has terminated\n");
-    }
+    if (!is_process_alive(profiled_pid_)) report_log("[Profiler] Profiled process " + std::to_string(profiled_pid_) + " has terminated\n");
 
     report_log("[Profiler] Profiling loop finished\n");
 }
@@ -123,36 +128,23 @@ void MetricCollector::setup_log_callback(ProfilingLogCallback callback)
 
 void MetricCollector::report_error(const std::string& error)
 {
-    if(error_callback_)
-    {
-        error_callback_(error);
-    }
-    else
-    {
-        std::cerr << error;
-    }
+    if(error_callback_) error_callback_(error);
+    else std::cerr << error;
 }
 
 void MetricCollector::report_metrics(const ProfilingSnapshot& snapshot)
 {
-    if(metric_callback_)
-    {
-        metric_callback_(snapshot);
-    }
-    else
-    {
-        report_error("Undiefined metric_callback in MC!");
-    }
+    if(metric_callback_) metric_callback_(snapshot);
+    else report_error("Undiefined metric_callback in MC!");
 }
 
 void MetricCollector::report_log(const std::string& log)
 {
-    if(log_callback)
-    {
-        log_callback(log);
-    }
-    else
-    {
-        report_error("Undefined log_callback in MC!");
-    }
+    if(log_callback) log_callback(log);
+    else report_error("Undefined log_callback in MC!");
+}
+
+void get_hotspot_data()
+{
+    SnapshotManager->get_callchains();
 }

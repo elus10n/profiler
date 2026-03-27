@@ -19,13 +19,45 @@ using ProfilingMetricCallback = std::function<void(const ProfilingSnapshot& snap
 using ProfilingErrorCallback = std::function<void(const std::string& error)>;
 using ProfilingLogCallback = std::function<void(const std::string& log)>;
 
+const int freq_cpu_hotspot = 5000;
+const int cache_miss_bound = 10;
+const int branch_miss_bound = 5;
+
+enum class Modes
+{
+    COUNTING, CPU_HOTSPOT, C_M_HOTSPOT, B_HOTSPOT
+};
+
+const uint32_t min_interval_ms = 100;
+const uint32_t max_interval_ms = 5000;
+
+struct ProfilingConfiguration
+{
+    Modes mode;
+    std::vector<MetricType> metrics;
+    int interval_ms;
+
+    ProfilingConfiguration() = default;
+    ProfilingConfiguration(const Modes mode, std::vector<MetricType>& metrics, const int interval) : mode(mode), metrics(std::move(metrics)), interval_ms(interval) {}
+};
+
+struct EventConfiguration
+{
+    std::vector<std::shared_ptr<Metric>> metrics;
+    bool is_sampling;
+    int count;
+
+    EventConfiguration() = default;
+    EventConfiguration(std::vector<std::shared_ptr<Metric>>& metrics, const bool is_sampling, const int count) : metrics(std::move(metrics)), is_sampling(is_sampling), count(count) {}
+};
+
 class MetricCollector 
 {
 public:
     MetricCollector();
     ~MetricCollector();
 
-    bool start_profiling(int pid, const std::vector<MetricType>& metrics, uint64_t interval_ms = 100);
+    bool start_profiling(int pid, const ProfilingConfiguration& config);
     
     void stop_profiling();
     
@@ -34,10 +66,13 @@ public:
     void setup_error_callback(ProfilingErrorCallback callback);
     void setup_metric_callback(ProfilingMetricCallback callback);
     void setup_log_callback(ProfilingLogCallback callback);
+    void get_hotspot_data();
     
     bool is_profiling() const { return profiling_active_; }
 
 private:
+    Modes mode;
+
     std::atomic<bool> profiling_active_{false};  
     std::atomic<int> profiled_pid_{-1};
     
@@ -51,8 +86,6 @@ private:
     ProfilingLogCallback log_callback;
 
     uint64_t profiling_interval_ms_;   
-    
-    std::vector<std::shared_ptr<Metric>> metrics_;
     
     void profiling_loop();                                    
 

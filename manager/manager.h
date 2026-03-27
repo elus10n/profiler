@@ -13,25 +13,6 @@
 #include "../metrics/metrics_collector.h"
 #include "../processes/process_manager.h"
 
-const uint32_t min_interval_ms = 100;
-const uint32_t max_interval_ms = 5000;
-
-struct ProfilingConfiguration
-{
-    std::vector<MetricType> metrics = {MetricType::PAGE_FAULTS};
-    int interval_ms = 500;
-
-    ProfilingConfiguration() = default;
-    ProfilingConfiguration(std::vector<MetricType>& metrics, int interval): metrics(std::move(metrics)), interval_ms(interval) {}
-
-    bool is_valid() const
-    {
-        return !metrics.empty() && interval_ms >= min_interval_ms && interval_ms <= max_interval_ms;
-    }
-
-    friend std::ostream& operator<<(std::ostream& ostr, const ProfilingConfiguration pr_config);
-};
-
 const ProfilingConfiguration default_cfg;
 
 using metric_callback = std::function<void(ProfilingSnapshot)>;
