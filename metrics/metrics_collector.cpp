@@ -41,14 +41,15 @@ bool MetricCollector::start_profiling(int pid, const ProfilingConfiguration& con
 
     auto metrics_ = Converter::convert_types_to_metric(config.metrics);
     bool is_sampling = mode == Modes::COUNTING ? false : true;
+    bool is_freq = (mode != Modes::COUNTING && mode == Modes::CPU_HOTSPOT) ? true : false ;
     int count = 0;
     if(mode == Modes::CPU_HOTSPOT) count = freq_cpu_hotspot;
     else if(mode == Modes::C_M_HOTSPOT) count = cache_miss_bound;
     else if(mode == Modes::B_HOTSPOT) count = branch_miss_bound;
 
-    EventConfiguration event_config(metrics_, is_sampling, count);
+    EventConfiguration event_config(metrics_, is_sampling, is_freq, count);
     
-    if (!eventManager->setup_perf_events(event_config)) return false;
+    if (!eventManager->setup_perf_events(pid, event_config)) return false;
     profiling_active_ = true;
     
     profiling_thread_ = std::thread(&MetricCollector::profiling_loop, this);
@@ -79,15 +80,15 @@ void MetricCollector::profiling_loop()
 
         if(mode == Modes::COUNTING)
         {
-            snapshotData data = eventManager->read_perf_events();
+            snapshotData data = eventManager->read_counting_raw();
             
-            ProfilingSnapshot snapshot = snapshotManager->collect_snapshot(profiling_interval_ms_, data); // метод для каунтинга должен называться по другому
+            ProfilingSnapshot snapshot = snapshotManager->collect_snapshot(profiling_interval_ms_, data);
             
             report_metrics(snapshot);
         }
         else
         {
-            HotspotRawData data = eventManager->read_mmap_memory();
+            HotspotRawData data = eventManager->read_hotspot_raw();
             
             snapshotManager->append_callchain(data);
         }
@@ -146,5 +147,5 @@ void MetricCollector::report_log(const std::string& log)
 
 void get_hotspot_data()
 {
-    SnapshotManager->get_callchains();
+    snapshotManager->get_callchains();
 }

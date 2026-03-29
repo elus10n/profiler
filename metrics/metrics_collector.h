@@ -41,16 +41,6 @@ struct ProfilingConfiguration
     ProfilingConfiguration(const Modes mode, std::vector<MetricType>& metrics, const int interval) : mode(mode), metrics(std::move(metrics)), interval_ms(interval) {}
 };
 
-struct EventConfiguration
-{
-    std::vector<std::shared_ptr<Metric>> metrics;
-    bool is_sampling;
-    int count;
-
-    EventConfiguration() = default;
-    EventConfiguration(std::vector<std::shared_ptr<Metric>>& metrics, const bool is_sampling, const int count) : metrics(std::move(metrics)), is_sampling(is_sampling), count(count) {}
-};
-
 class MetricCollector 
 {
 public:
