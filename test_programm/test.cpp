@@ -5,6 +5,9 @@
 #include <memory>
 #include <thread>
 #include <atomic>
+#include <iostream>
+#include <sys/types.h>
+#include <unistd.h>
 
 class CPUStressTest {
 private:
@@ -162,6 +165,7 @@ public:
 };
 
 int main() {
+    std::cout << "Pid: " << getpid() << std::endl;
     // Создаем большую нагрузку
     CPUStressTest stress_test(2000000);
     

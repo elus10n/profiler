@@ -48,6 +48,7 @@ class Converter
                 return std::make_shared<ContextSwithces>();
                 break;
             }
+            default: throw std::runtime_error("Unknown MT in Converter!");
         }
     }
 

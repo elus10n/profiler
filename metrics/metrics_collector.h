@@ -14,6 +14,7 @@
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <map>
 
 using ProfilingMetricCallback = std::function<void(const ProfilingSnapshot& snapshot)>;
 using ProfilingErrorCallback = std::function<void(const std::string& error)>;
@@ -56,7 +57,7 @@ public:
     void setup_error_callback(ProfilingErrorCallback callback);
     void setup_metric_callback(ProfilingMetricCallback callback);
     void setup_log_callback(ProfilingLogCallback callback);
-    void get_hotspot_data();
+    std::unordered_map<std::vector<uint64_t>, int, CallchainHash> get_hotspot_data();
     
     bool is_profiling() const { return profiling_active_; }
 

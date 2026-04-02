@@ -2,6 +2,7 @@
 #define EVENTCREATOR_H
 
 #include "metrics.h"
+#include "../partial.h"
 
 #include <iostream>
 #include <unistd.h>
@@ -62,8 +63,7 @@ class EventManager
             int fd = open_perf_event(pid, config.metrics[0], config.is_sampling, config.is_freq, config.count);
             if (fd < 0)
             {
-                cleanup_perf_events(); // надо добавить поддержку закрытия hotspot event'а
-                //надо проверить, нужно ли закрывать неоткрывшийся дескриптор (тут то он один)
+                cleanup_perf_events();
                 return false;
             }
             long page_size = sysconf(_SC_PAGESIZE);
@@ -131,7 +131,6 @@ class EventManager
         
         int fd = perf_event_open(&attr, pid, -1, -1, 0);
         if (fd < 0)  return -1;
-        //добавить обработку ошибок
         ioctl(fd, PERF_EVENT_IOC_RESET, 0);
         ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
         

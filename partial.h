@@ -3,6 +3,7 @@
 
 #include <map>
 #include <cstdint>
+#include <memory>
 
 using snapshotData = std::map<std::shared_ptr<Metric>, uint64_t>;
 

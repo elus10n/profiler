@@ -91,6 +91,8 @@ void MetricCollector::profiling_loop()
             HotspotRawData data = eventManager->read_hotspot_raw();
             
             snapshotManager->append_callchain(data);
+
+            eventManager->update_tail(data.head);
         }
 
         auto elapsed = std::chrono::steady_clock::now() - interval_start;
@@ -145,7 +147,4 @@ void MetricCollector::report_log(const std::string& log)
     else report_error("Undefined log_callback in MC!");
 }
 
-void get_hotspot_data()
-{
-    snapshotManager->get_callchains();
-}
+std::unordered_map<std::vector<uint64_t>, int, CallchainHash> MetricCollector::get_hotspot_data() {return snapshotManager->get_callchains();}
