@@ -155,7 +155,6 @@ public:
             memory_intensive_operations();
             algorithmic_stress();
             string_manipulation_stress();
-            run_recursive_stress();
             parallel_stress();
             
             // Переинициализация данных для разнообразия

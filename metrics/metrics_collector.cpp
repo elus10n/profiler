@@ -15,10 +15,7 @@ MetricCollector::MetricCollector()
     snapshotManager = std::make_unique<SnapshotManager>();
 }
 
-MetricCollector::~MetricCollector()
-{
-    stop_profiling();
-}
+MetricCollector::~MetricCollector() {stop_profiling();}
 
 bool MetricCollector::start_profiling(int pid, const ProfilingConfiguration& config) 
 {    
@@ -40,7 +37,7 @@ bool MetricCollector::start_profiling(int pid, const ProfilingConfiguration& con
     profiling_interval_ms_ = config.interval_ms;
 
     auto metrics_ = Converter::convert_types_to_metric(config.metrics);
-    bool is_sampling = mode == Modes::COUNTING ? false : true;
+    bool is_sampling = (mode == Modes::COUNTING) ? false : true;
     bool is_freq = (mode != Modes::COUNTING && mode == Modes::CPU_HOTSPOT) ? true : false ;
     int count = 0;
     if(mode == Modes::CPU_HOTSPOT) count = freq_cpu_hotspot;
@@ -104,30 +101,15 @@ void MetricCollector::profiling_loop()
     report_log("[Profiler] Profiling loop finished\n");
 }
 
-bool MetricCollector::is_process_alive(int pid) 
-{
-    return (kill(pid, 0) == 0);
-}
+bool MetricCollector::is_process_alive(int pid) {return (kill(pid, 0) == 0);}
 
-const std::vector<ProfilingSnapshot>& MetricCollector::get_snapshots() 
-{
-    return snapshotManager->getSnapshots();
-}
+const std::vector<ProfilingSnapshot>& MetricCollector::get_snapshots() {return snapshotManager->getSnapshots();}
 
-void MetricCollector::setup_error_callback(ProfilingErrorCallback callback)
-{
-    error_callback_ = callback;
-}
+void MetricCollector::setup_error_callback(ProfilingErrorCallback callback) {error_callback_ = callback;}
 
-void MetricCollector::setup_metric_callback(ProfilingMetricCallback callback)
-{
-    metric_callback_ = callback;
-}
+void MetricCollector::setup_metric_callback(ProfilingMetricCallback callback) {metric_callback_ = callback;}
 
-void MetricCollector::setup_log_callback(ProfilingLogCallback callback)
-{
-    log_callback = callback;
-}
+void MetricCollector::setup_log_callback(ProfilingLogCallback callback) {log_callback = callback;}
 
 void MetricCollector::report_error(const std::string& error)
 {
